@@ -225,7 +225,7 @@ export function drawTitleBlock(ctx, w, h, state, grade) {
   const zone = titleZone(state.layout, w, h);
   // Dense grids get a smaller title and a lighter scrim so the photos
   // underneath stay readable.
-  const titleScale = state.layout === 'grid9' ? 0.60 : state.layout === 'grid4' ? 0.78 : 1;
+  const titleScale = state.layout === 'grid9' ? 0.50 : state.layout === 'grid4' ? 0.78 : 1;
   const scrimScale = state.layout === 'grid9' ? 0.62 : state.layout === 'grid4' ? 0.80 : 1;
   const scrimMid = (0.55 * scrimScale).toFixed(2);
   const scrimEnd = (0.82 * scrimScale).toFixed(2);
