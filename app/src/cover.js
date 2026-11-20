@@ -29,7 +29,10 @@ export const GRADES = {
 
 export const PANEL_COUNT = 9;
 
-/** Default cover state: one fresh object per call so undo snapshots stay independent. */
+/** Default cover state: one fresh object per call so undo snapshots stay independent.
+ * Panels start with a strong upward bias (oy +0.45): a portrait photo in a
+ * short side panel otherwise shows a headless torso, and the fit clamps the
+ * pan, so a photo with no vertical excess is unaffected. */
 export function defaultState() {
   return {
     layout: 'hero',
@@ -49,7 +52,7 @@ export function defaultState() {
       photo: i % 2,
       zoom: 1,
       ox: 0,
-      oy: 0,
+      oy: 0.45,
     })),
   };
 }
@@ -70,9 +73,9 @@ export function layoutPanels(layout, w, h) {
       return [{ x: 0, y: 0, w: 1, h: 1, rot: 0 }];
     case 'tilted':
       return [
-        { x: 0.03, y: 0.30, w: 0.44, h: 0.46, rot: -0.10 },
-        { x: 0.28, y: 0.05, w: 0.46, h: 0.58, rot: 0.03 },
-        { x: 0.55, y: 0.30, w: 0.44, h: 0.46, rot: 0.09 },
+        { x: 0.03, y: 0.30, w: 0.44, h: 0.46, rot: -0.06 },
+        { x: 0.28, y: 0.05, w: 0.46, h: 0.58, rot: 0.02 },
+        { x: 0.55, y: 0.30, w: 0.44, h: 0.46, rot: 0.06 },
       ];
     case 'triptych':
       return [inset(0, 0, 1 / 3, 1), inset(1 / 3, 0, 1 / 3, 1), inset(2 / 3, 0, 1 / 3, 1)];
@@ -91,13 +94,19 @@ export function titleZone(layout, w, h) {
   return { x: 0, y: h * 0.72, w, h: h * 0.28, align: 'center' };
 }
 
-/** Cover-fit rectangle for an image inside a panel, with the panel's zoom and pan. */
+/** Cover-fit rectangle for an image inside a panel, with the panel's zoom and pan.
+ * Pan is clamped to the photo's excess: dragging (or a default offset) can never
+ * pull the photo out of its panel and leave a gap. */
 export function coverFitRect(img, rect, panel) {
   const scale = Math.max(rect.w / img.naturalWidth, rect.h / img.naturalHeight) * (panel.zoom || 1);
   const pw = img.naturalWidth * scale;
   const ph = img.naturalHeight * scale;
-  const cx = rect.x + rect.w / 2 + (panel.ox || 0) * rect.w;
-  const cy = rect.y + rect.h / 2 + (panel.oy || 0) * rect.h;
+  const maxOx = Math.max(0, (pw - rect.w) / 2 / rect.w);
+  const maxOy = Math.max(0, (ph - rect.h) / 2 / rect.h);
+  const ox = Math.max(-maxOx, Math.min(maxOx, panel.ox || 0));
+  const oy = Math.max(-maxOy, Math.min(maxOy, panel.oy || 0));
+  const cx = rect.x + rect.w / 2 + ox * rect.w;
+  const cy = rect.y + rect.h / 2 + oy * rect.h;
   return { x: cx - pw / 2, y: cy - ph / 2, w: pw, h: ph };
 }
 
@@ -172,13 +181,17 @@ export function fitTitleText(ctx, text, maxWidth, startSize, font) {
   return size;
 }
 
-/** The title block: scrim, halftone, big Anton title with a sunset gradient, script subtitle, stars. */
+/** The title block: scrim, halftone, big Anton title with a sunset gradient, script subtitle, stars.
+ * Grid layouts show 4-9 small photos, so the title shrinks there: at full size it
+ * would swallow the whole bottom row (the 3x3 shot proved it). */
 export function drawTitleBlock(ctx, w, h, state, grade) {
   const zone = titleZone(state.layout, w, h);
+  const titleScale = state.layout === 'grid9' ? 0.60 : state.layout === 'grid4' ? 0.78 : 1;
+  const scrimScale = state.layout === 'grid9' ? 0.62 : state.layout === 'grid4' ? 0.8 : 1;
   const scrim = ctx.createLinearGradient(0, zone.y - h * 0.06, 0, zone.y + zone.h);
   scrim.addColorStop(0, 'rgba(10,6,18,0)');
-  scrim.addColorStop(0.45, 'rgba(10,6,18,0.55)');
-  scrim.addColorStop(1, 'rgba(10,6,18,0.82)');
+  scrim.addColorStop(0.45, `rgba(10,6,18,${(0.55 * scrimScale).toFixed(2)})`);
+  scrim.addColorStop(1, `rgba(10,6,18,${(0.82 * scrimScale).toFixed(2)})`);
   ctx.fillStyle = scrim;
   ctx.fillRect(zone.x, zone.y - h * 0.06, zone.w, zone.h + h * 0.06);
   if (state.halftone) drawHalftoneDots(ctx, zone, w, h, '#ffffff');
@@ -189,7 +202,7 @@ export function drawTitleBlock(ctx, w, h, state, grade) {
   ctx.textBaseline = 'alphabetic';
 
   const title = (state.title || 'UNTITLED').toUpperCase();
-  const titleSize = fitTitleText(ctx, title, zone.w - pad * 2, zone.h * 0.52, (s) => `${s}px Anton, "Arial Black", sans-serif`);
+  const titleSize = fitTitleText(ctx, title, zone.w - pad * 2, zone.h * 0.52 * titleScale, (s) => `${s}px Anton, "Arial Black", sans-serif`);
   const titleGrad = ctx.createLinearGradient(0, zone.y + zone.h * 0.08, 0, zone.y + zone.h * 0.62);
   titleGrad.addColorStop(0, '#ffffff');
   titleGrad.addColorStop(0.55, grade.sky[0]);
@@ -208,7 +221,7 @@ export function drawTitleBlock(ctx, w, h, state, grade) {
 
   const sub = (state.subtitle || '').trim();
   if (sub) {
-    const subSize = Math.max(14, zone.h * 0.17);
+    const subSize = Math.max(14, zone.h * 0.17 * titleScale);
     ctx.font = `${subSize}px Pacifico, cursive`;
     ctx.fillStyle = grade.ink;
     ctx.shadowColor = 'rgba(0,0,0,0.55)';
@@ -218,7 +231,7 @@ export function drawTitleBlock(ctx, w, h, state, grade) {
   }
 
   // Heat meter: filled stars for the rating, dim stars for the rest.
-  const starSize = Math.max(12, zone.h * 0.13);
+  const starSize = Math.max(12, zone.h * 0.13 * titleScale);
   ctx.font = `${starSize}px sans-serif`;
   ctx.textAlign = 'left';
   const stars = '★★★★★';
@@ -231,7 +244,8 @@ export function drawTitleBlock(ctx, w, h, state, grade) {
   ctx.fillText('★'.repeat(Math.max(0, Math.min(5, state.stars || 0))), sx, sy);
 }
 
-/** Diagonal badge ribbon across the top-right corner. */
+/** Diagonal badge ribbon across the top-right corner, kept short so it stays in
+ * the corner triangle instead of crossing the face of the top-right photo. */
 export function drawBadgeRibbon(ctx, w, h, state, grade) {
   if (!state.ribbon) return;
   const text = (state.badge || '').trim().toUpperCase();
@@ -240,8 +254,8 @@ export function drawBadgeRibbon(ctx, w, h, state, grade) {
   ctx.save();
   ctx.translate(w, 0);
   ctx.rotate(Math.PI / 4);
-  const bandH = s * 0.055;
-  const bandW = s * 0.62;
+  const bandH = s * 0.045;
+  const bandW = s * 0.40;
   ctx.fillStyle = grade.sky[1];
   ctx.fillRect(-bandW / 2, -bandH / 2 + s * 0.16, bandW, bandH);
   ctx.fillStyle = '#ffffff';

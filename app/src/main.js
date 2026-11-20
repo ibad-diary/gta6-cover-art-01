@@ -275,7 +275,7 @@ function bindControls() {
   $('pany').addEventListener('change', () => commitHistory('pan y'));
   $('resetPanel').addEventListener('click', () => {
     commitHistory('reset panel');
-    state.panels[state.selected] = { photo: state.panels[state.selected].photo, zoom: 1, ox: 0, oy: 0 };
+    state.panels[state.selected] = { photo: state.panels[state.selected].photo, zoom: 1, ox: 0, oy: 0.45 };
     syncControls();
     redraw();
   });
@@ -288,12 +288,19 @@ function bindControls() {
   });
   $('export').addEventListener('click', exportCover);
   $('upload').addEventListener('change', async (e) => {
-    const files = [...e.target.files].slice(0, 3);
+    // Up to 9 photos in one batch (one per panel in the 9-grid); each new photo
+    // is dealt to the next panel in order, so a batch fills the whole cover.
+    const files = [...e.target.files].slice(0, 9);
+    const written = [];
     for (const file of files) {
       const img = await loadImage(URL.createObjectURL(file));
       const slot = photos.findIndex((p) => p && p.name.startsWith('Upload'));
       const at = slot === -1 ? photos.length : slot;
       photos[at] = { img, name: file.name.replace(/\.[^.]+$/, '').slice(0, 18) || 'Upload' };
+      written.push(at);
+    }
+    if (written.length) {
+      for (let i = 0; i < PANEL_COUNT; i++) state.panels[i].photo = written[i % written.length];
     }
     commitHistory('upload');
     syncControls();

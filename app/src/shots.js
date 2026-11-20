@@ -18,6 +18,27 @@ export async function runShot(shot, query, state, photos, helpers) {
   // Every panel uses the two loaded photos, alternating, unless the query names one.
   const only = query.get('only');
   state.panels.forEach((p, i) => { p.photo = only !== null ? Number(only) : i % 2; });
+  // Staged shots: vary the crop per panel so the two sample photos read as
+  // different shots, with an upward bias that keeps faces in frame (the fit
+  // clamps the pan, so no gap can open). Grid layouts can zoom further; the
+  // hero's short side panels stay near 1:1 or heads get cropped.
+  const zoomByPanel = [1.0, 1.18, 1.32, 1.10, 1.26, 1.06, 1.22, 1.14, 1.38];
+  const oxByPanel = [0, 0.06, -0.06, -0.05, 0.07, 0, -0.07, 0.05, 0];
+  const grid = state.layout === 'grid9' || state.layout === 'grid4';
+  state.panels.forEach((p, i) => {
+    if (grid) {
+      const z = zoomByPanel[i];
+      p.zoom = z;
+      p.ox = oxByPanel[i];
+      p.oy = 0.10 + (z - 1) * 0.3;
+    } else {
+      // Short/wide panels slice a portrait photo horizontally: bias hard to
+      // the top (boulevard is portrait, pier is square) or heads get cropped.
+      p.zoom = Math.min(zoomByPanel[i], 1.12);
+      p.ox = oxByPanel[i];
+      p.oy = p.photo === 0 ? 0.62 : 0.38;
+    }
+  });
 
   if (shot === 'cover') document.body.classList.add('shot-cover');
   try { await document.fonts.ready; } catch { /* fonts fall back to system sans */ }
