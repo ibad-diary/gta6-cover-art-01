@@ -1,9 +1,7 @@
-// Vice Coast Cover Studio — the entry program (Node 22, standard library only).
-// It hands the app in: copies this repo's app/ and screenshots/ into the output
-// directory and writes /output/dossier.json with the kit's vendored library.
-// Outside the grader, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-
+// Entry submission program for the Vice Coast cover app.
+// Local use: mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Copies app/ and screenshots/ into the output directory and writes
+// dossier.json with the kit library (vendor/makefun-app.ts).
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,10 +16,6 @@ mkdirSync(join(out, 'screenshots'), { recursive: true });
 if (existsSync(join(here, 'screenshots'))) {
   cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
 }
-
-// The scorer's caps from the kit: the dossier text cap shapes the bytes, the rest
-// refuse an entry the scorer would refuse (over 4 screenshots or one over 256 KiB;
-// app/ over 993 files, 48 MiB, or a path over 1000 bytes).
 writeFileSync(
   join(out, 'dossier.json'),
   buildDossier(out, {

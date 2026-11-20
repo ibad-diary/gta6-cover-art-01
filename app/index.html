@@ -1,92 +1,90 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Coast — Cover Studio</title>
-<meta name="description" content="Turn any photo and caption into multi-panel GTA-poster-style cover art, offline in your browser. Photos never leave your machine.">
-<link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vice Coast — Cover Studio</title>
+  <meta name="description" content="Turn any photo and caption into multi-panel GTA-poster-style cover art, offline in your browser. Photos never leave your machine.">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="brand"><span class="brand-mark">VC</span> Vice Coast <em>Cover Studio</em></div>
-  <p class="tagline">Your photo. Your caption. Poster cover art in three steps — offline.</p>
-</header>
-<main class="app">
-  <section class="controls" aria-label="Cover controls">
-    <div class="steps"><span>1 Photo</span><span>2 Layout &amp; grade</span><span>3 Export PNG</span></div>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">VC</span> Vice Coast <em>Cover Studio</em></div>
+    <p class="tagline">Your photo. Your caption. Poster cover art in three steps — offline.</p>
+  </header>
+  <main class="app">
+    <section class="controls" aria-label="Cover controls">
+      <div class="steps"><span>1 Photo</span><span>2 Layout &amp; grade</span><span>3 Export PNG</span></div>
 
-    <h2>Photos</h2>
-    <div class="row">
-      <label class="upload">Add your photos
-        <input id="upload" type="file" accept="image/*" multiple>
+      <h2>Photos</h2>
+      <div class="row">
+        <label class="upload">Add your photos <input id="upload" type="file" accept="image/*" multiple></label>
+        <button id="sampleBoulevard" type="button" class="ghost">Sample: Boulevard</button>
+        <button id="samplePier" type="button" class="ghost">Sample: Pier</button>
+      </div>
+      <p class="hint">Photos are read on this machine and never uploaded. Add up to 9 at once — each one fills the next panel. Drag the preview to move a photo inside its panel; scroll over it to zoom.</p>
+
+      <h2>Layout</h2>
+      <div id="layouts" class="picker" role="group" aria-label="Cover layout"></div>
+
+      <h2>Grade</h2>
+      <div id="grades" class="picker" role="group" aria-label="Colour grade"></div>
+
+      <h2>Panels</h2>
+      <div id="panels" class="panels"></div>
+      <button id="fillAll" type="button" class="ghost">Fill every panel with the selected photo</button>
+
+      <h2>Selected panel</h2>
+      <div class="sliders">
+        <label>Zoom <input id="zoom" type="range" min="0.6" max="3" step="0.01" value="1"> <span id="zoomVal">100%</span></label>
+        <label>Move X <input id="panx" type="range" min="-0.5" max="0.5" step="0.01" value="0"></label>
+        <label>Move Y <input id="pany" type="range" min="-0.5" max="0.5" step="0.01" value="0"></label>
+      </div>
+      <button id="resetPanel" type="button" class="ghost">Reset selected panel</button>
+
+      <h2>Lettering</h2>
+      <label>Title <input id="title" type="text" maxlength="24" value="NEON SHORE"></label>
+      <label>Subtitle <input id="subtitle" type="text" maxlength="40" value="a vice city story"></label>
+      <label>Badge ribbon <input id="badge" type="text" maxlength="14" value="VICE COAST"></label>
+      <label>Heat meter
+        <select id="stars">
+          <option value="1">★☆☆☆☆</option>
+          <option value="2">★★☆☆☆</option>
+          <option value="3">★★★☆☆</option>
+          <option value="4" selected>★★★★☆</option>
+          <option value="5">★★★★★</option>
+        </select>
       </label>
-      <button id="sampleBoulevard" type="button" class="ghost">Sample: Boulevard</button>
-      <button id="samplePier" type="button" class="ghost">Sample: Pier</button>
-    </div>
-    <p class="hint">Photos are read on this machine and never uploaded. Add up to 9 at once — each one fills the next panel. Drag the preview to move a photo inside its panel; scroll over it to zoom.</p>
 
-    <h2>Layout</h2>
-    <div id="layouts" class="picker" role="group" aria-label="Cover layout"></div>
+      <h2>Finish</h2>
+      <div class="checks">
+        <label><input id="frame" type="checkbox" checked> White poster frame</label>
+        <label><input id="halftone" type="checkbox" checked> Halftone title</label>
+        <label><input id="grain" type="checkbox" checked> Film grain</label>
+        <label><input id="vignette" type="checkbox" checked> Vignette</label>
+        <label><input id="ribbon" type="checkbox" checked> Badge ribbon</label>
+      </div>
+      <div class="row">
+        <button id="undo" type="button" class="ghost">Undo</button>
+        <button id="redo" type="button" class="ghost">Redo</button>
+      </div>
 
-    <h2>Grade</h2>
-    <div id="grades" class="picker" role="group" aria-label="Colour grade"></div>
+      <h2>Export PNG</h2>
+      <div id="sizes" class="picker" role="group" aria-label="Export size"></div>
+      <button id="export" type="button" class="export">Export PNG</button>
+      <p id="status" role="status"></p>
+      <p class="fine">Original art, made with free OFL fonts (Anton, Pacifico, Bebas Neue). No game logos, artwork or fonts.</p>
+    </section>
 
-    <h2>Panels</h2>
-    <div id="panels" class="panels"></div>
-    <button id="fillAll" type="button" class="ghost">Fill every panel with the selected photo</button>
-
-    <h2>Selected panel</h2>
-    <div class="sliders">
-      <label>Zoom <input id="zoom" type="range" min="0.6" max="3" step="0.01" value="1"> <span id="zoomVal">100%</span></label>
-      <label>Move X <input id="panx" type="range" min="-0.5" max="0.5" step="0.01" value="0"></label>
-      <label>Move Y <input id="pany" type="range" min="-0.5" max="0.5" step="0.01" value="0"></label>
-    </div>
-    <button id="resetPanel" type="button" class="ghost">Reset selected panel</button>
-
-    <h2>Lettering</h2>
-    <label>Title <input id="title" type="text" maxlength="24" value="NEON SHORE"></label>
-    <label>Subtitle <input id="subtitle" type="text" maxlength="40" value="a vice city story"></label>
-    <label>Badge ribbon <input id="badge" type="text" maxlength="14" value="VICE COAST"></label>
-    <label>Heat meter
-      <select id="stars">
-        <option value="1">★☆☆☆☆</option>
-        <option value="2">★★☆☆☆</option>
-        <option value="3">★★★☆☆</option>
-        <option value="4" selected>★★★★☆</option>
-        <option value="5">★★★★★</option>
-      </select>
-    </label>
-
-    <h2>Finish</h2>
-    <div class="checks">
-      <label><input id="frame" type="checkbox" checked> White poster frame</label>
-      <label><input id="halftone" type="checkbox" checked> Halftone title</label>
-      <label><input id="grain" type="checkbox" checked> Film grain</label>
-      <label><input id="vignette" type="checkbox" checked> Vignette</label>
-      <label><input id="ribbon" type="checkbox" checked> Badge ribbon</label>
-    </div>
-    <div class="row">
-      <button id="undo" type="button" class="ghost">Undo</button>
-      <button id="redo" type="button" class="ghost">Redo</button>
-    </div>
-
-    <h2>Export PNG</h2>
-    <div id="sizes" class="picker" role="group" aria-label="Export size"></div>
-    <button id="export" type="button" class="export">Export PNG</button>
-    <p id="status" role="status"></p>
-    <p class="fine">Original art, made with free OFL fonts (Anton, Pacifico, Bebas Neue). No game logos, artwork or fonts.</p>
-  </section>
-
-  <section class="stage" aria-label="Live cover preview">
-    <div class="canvas-wrap">
-      <canvas id="cover" width="1080" height="1080" aria-label="The cover preview"></canvas>
-      <canvas id="overlay" aria-hidden="true"></canvas>
-    </div>
-    <p class="stage-hint">Click a panel to select it, then drag to reposition its photo.</p>
-  </section>
-</main>
-<script type="module" src="./src/main.js"></script>
+    <section class="stage" aria-label="Live cover preview">
+      <div class="canvas-wrap">
+        <canvas id="cover" width="1080" height="1080" aria-label="The cover preview"></canvas>
+        <canvas id="overlay" aria-hidden="true"></canvas>
+      </div>
+      <p class="stage-hint">Click a panel to select it, then drag to reposition its photo.</p>
+    </section>
+  </main>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>

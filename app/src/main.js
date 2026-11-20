@@ -1,42 +1,54 @@
-// Vice Coast Cover Studio: the editor. Pick photos, choose a layout and a grade,
-// drag any panel to reposition its photo, write the caption, export a PNG.
-// Photos are read on this machine with FileReader and never leave it.
-import { SIZES, LAYOUTS, GRADES, PANEL_COUNT, defaultState, layoutPanels, renderCover } from './cover.js';
+// Vice Coast — Cover Studio: editor wiring (ES module).
+import {
+  SIZES,
+  LAYOUTS,
+  GRADES,
+  PANEL_COUNT,
+  defaultState,
+  layoutPanels,
+  renderCover,
+} from './cover.js';
 import { runShot } from './shots.js';
 
 const $ = (id) => document.getElementById(id);
+
 const canvas = $('cover');
 const statusEl = $('status');
 const state = defaultState();
 
-// Loaded photos: { img, name } per slot. Samples ship with the app; uploads replace a slot.
+// Photo slots: { img, name }. Slot index is what state.panels[i].photo
+// points at. Slots 0 and 1 start as the two bundled samples.
 const photos = [];
-let history = [];
-let future = [];
+const history = [];
+const future = [];
 
 export function loadImage(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = reject;
+    img.onerror = () => reject(new Error(`Could not load image: ${url}`));
     img.src = url;
   });
 }
 
-async function loadSample(name) {
+export async function loadSample(name) {
   const img = await loadImage(`samples/${name}.jpg`);
   return { img, name };
 }
 
-/** Pushes the current state onto the undo stack and clears redo. */
+export function refreshUndoButtons() {
+  $('undo').disabled = !history.length;
+  $('redo').disabled = !future.length;
+}
+
 export function commitHistory(label) {
+  // Label is documentation only; only the snapshot is stored.
   history.push(JSON.stringify(state));
   if (history.length > 60) history.shift();
-  future = [];
+  future.length = 0;
   refreshUndoButtons();
 }
 
-/** Restores a serialised state snapshot into the live state object. */
 export function applySnapshot(json) {
   const snap = JSON.parse(json);
   for (const key of Object.keys(state)) delete state[key];
@@ -61,51 +73,43 @@ export function redoCover() {
   refreshUndoButtons();
 }
 
-function refreshUndoButtons() {
-  $('undo').disabled = !history.length;
-  $('redo').disabled = !future.length;
+export function highlightSelectedPanel() {
+  const overlay = $('overlay');
+  overlay.width = canvas.width;
+  overlay.height = canvas.height;
+  const shown = canvas.getBoundingClientRect();
+  overlay.style.width = `${shown.width}px`;
+  overlay.style.height = `${shown.height}px`;
+  const octx = overlay.getContext('2d');
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+  const panels = layoutPanels(state.layout, canvas.width, canvas.height);
+  const i = Math.min(state.selected, panels.length - 1);
+  const p = panels[i];
+  octx.save();
+  octx.strokeStyle = '#ffd166';
+  octx.lineWidth = Math.max(3, canvas.width * 0.004);
+  octx.setLineDash([14, 8]);
+  octx.strokeRect(p.x * canvas.width, p.y * canvas.height, p.w * canvas.width, p.h * canvas.height);
+  octx.restore();
 }
 
-function redraw() {
+export function redraw() {
   const images = photos.map((p) => (p ? p.img : null));
   renderCover(canvas, images, state);
   highlightSelectedPanel();
 }
 
-/** Draws the selection outline around the chosen panel on the preview canvas. */
-export function highlightSelectedPanel() {
-  // The outline lives on the overlay canvas, stacked over the preview.
-  const overlay = $('overlay');
-  const rect = canvas.getBoundingClientRect();
-  overlay.width = canvas.width;
-  overlay.height = canvas.height;
-  overlay.style.width = `${rect.width}px`;
-  overlay.style.height = `${rect.height}px`;
-  const ctx = overlay.getContext('2d');
-  ctx.clearRect(0, 0, overlay.width, overlay.height);
-  const panels = layoutPanels(state.layout, canvas.width, canvas.height);
-  const i = Math.min(state.selected, panels.length - 1);
-  const p = panels[i];
-  ctx.save();
-  ctx.strokeStyle = '#ffd166';
-  ctx.lineWidth = Math.max(3, canvas.width * 0.004);
-  ctx.setLineDash([14, 8]);
-  ctx.strokeRect(p.x * canvas.width, p.y * canvas.height, p.w * canvas.width, p.h * canvas.height);
-  ctx.restore();
-}
-
-/** Builds the layout picker buttons from the engine's LAYOUTS table. */
 export function buildLayoutPicker() {
   const box = $('layouts');
   box.innerHTML = '';
-  for (const [key, def] of Object.entries(LAYOUTS)) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'pick';
-    b.dataset.layout = key;
-    b.textContent = def.label;
-    b.title = def.blurb;
-    b.addEventListener('click', () => {
+  for (const [key, entry] of Object.entries(LAYOUTS)) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pick';
+    btn.dataset.layout = key;
+    btn.title = entry.blurb;
+    btn.textContent = entry.label;
+    btn.addEventListener('click', () => {
       if (state.layout === key) return;
       commitHistory('layout');
       state.layout = key;
@@ -113,59 +117,58 @@ export function buildLayoutPicker() {
       syncControls();
       redraw();
     });
-    box.appendChild(b);
+    box.appendChild(btn);
   }
 }
 
-/** Builds the grade swatch buttons from the engine's GRADES table. */
 export function buildGradePicker() {
   const box = $('grades');
   box.innerHTML = '';
-  for (const [key, def] of Object.entries(GRADES)) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'swatch';
-    b.dataset.grade = key;
-    b.style.background = `linear-gradient(135deg, ${def.sky[0]}, ${def.sky[1]})`;
-    b.textContent = def.label;
-    b.addEventListener('click', () => {
+  for (const [key, entry] of Object.entries(GRADES)) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'swatch';
+    btn.dataset.grade = key;
+    btn.style.background = `linear-gradient(135deg, ${entry.sky[0]}, ${entry.sky[1]})`;
+    btn.textContent = entry.label;
+    btn.addEventListener('click', () => {
       if (state.grade === key) return;
       commitHistory('grade');
       state.grade = key;
       syncControls();
       redraw();
     });
-    box.appendChild(b);
+    box.appendChild(btn);
   }
 }
 
-/** Builds the three export-size buttons from the engine's SIZES table. */
 export function buildSizePicker() {
   const box = $('sizes');
   box.innerHTML = '';
-  for (const [key, def] of Object.entries(SIZES)) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'pick';
-    b.dataset.size = key;
-    b.textContent = def.label;
-    b.addEventListener('click', () => {
+  for (const [key, entry] of Object.entries(SIZES)) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pick';
+    btn.dataset.size = key;
+    btn.textContent = entry.label;
+    btn.addEventListener('click', async () => {
+      if (state.size === key) return;
       commitHistory('size');
       state.size = key;
       syncControls();
       redraw();
-      exportCover();
+      // Picking a size exports the cover at that size right away.
+      await exportCover();
     });
-    box.appendChild(b);
+    box.appendChild(btn);
   }
 }
 
-/** Builds the per-panel photo slot buttons (sample or uploaded photo per panel). */
 export function buildPanelList() {
   const box = $('panels');
   box.innerHTML = '';
   const count = layoutPanels(state.layout, 1, 1).length;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     const row = document.createElement('div');
     row.className = 'panel-row';
     const label = document.createElement('span');
@@ -185,22 +188,22 @@ export function buildPanelList() {
       state.selected = i;
       redraw();
     });
-    row.appendChild(label);
-    row.appendChild(sel);
-    const use = document.createElement('button');
-    use.type = 'button';
-    use.textContent = 'Select';
-    use.addEventListener('click', () => {
+    const pickBtn = document.createElement('button');
+    pickBtn.type = 'button';
+    pickBtn.className = 'ghost';
+    pickBtn.textContent = 'Select';
+    pickBtn.addEventListener('click', () => {
       state.selected = i;
       syncControls();
       redraw();
     });
-    row.appendChild(use);
+    row.appendChild(label);
+    row.appendChild(sel);
+    row.appendChild(pickBtn);
     box.appendChild(row);
   }
 }
 
-/** Copies the live state into every control so undo/redo and shots stay in sync. */
 export function syncControls() {
   $('title').value = state.title;
   $('subtitle').value = state.subtitle;
@@ -211,9 +214,11 @@ export function syncControls() {
   $('vignette').checked = state.vignette;
   $('halftone').checked = state.halftone;
   $('ribbon').checked = state.ribbon;
-  document.querySelectorAll('#layouts .pick').forEach((b) => b.classList.toggle('on', b.dataset.layout === state.layout));
-  document.querySelectorAll('#grades .swatch').forEach((b) => b.classList.toggle('on', b.dataset.grade === state.grade));
-  document.querySelectorAll('#sizes .pick').forEach((b) => b.classList.toggle('on', b.dataset.size === state.size));
+  for (const [key, group] of [['layout', 'layouts'], ['grade', 'grades'], ['size', 'sizes']]) {
+    document.querySelectorAll(`#${group} .pick, #${group} .swatch`).forEach((btn) => {
+      btn.classList.toggle('on', btn.dataset[key] === state[key]);
+    });
+  }
   const panel = state.panels[state.selected] || { zoom: 1, ox: 0, oy: 0 };
   $('zoom').value = String(panel.zoom);
   $('panx').value = String(panel.ox);
@@ -222,12 +227,11 @@ export function syncControls() {
   buildPanelList();
 }
 
-/** Renders the cover at full export size and downloads it as a PNG. */
 export function exportCover() {
-  const off = document.createElement('canvas');
-  const images = photos.map((p) => (p ? p.img : null));
-  const { w, h } = renderCover(off, images, state);
   return new Promise((resolve) => {
+    const off = document.createElement('canvas');
+    const images = photos.map((p) => (p ? p.img : null));
+    const { w, h } = renderCover(off, images, state);
     off.toBlob((blob) => {
       if (!blob) {
         statusEl.textContent = 'Export failed in this browser.';
@@ -245,68 +249,110 @@ export function exportCover() {
   });
 }
 
-/** Fills every panel with the selected photo slot, in one step. */
 export function fillAllPanels(photoIndex) {
   commitHistory('fill all');
-  for (let i = 0; i < PANEL_COUNT; i++) state.panels[i].photo = photoIndex;
+  for (let i = 0; i < PANEL_COUNT; i += 1) {
+    state.panels[i].photo = photoIndex;
+  }
   redraw();
 }
 
 function bindControls() {
-  $('title').addEventListener('input', (e) => { state.title = e.target.value; redraw(); });
-  $('title').addEventListener('change', () => commitHistory('title'));
-  $('subtitle').addEventListener('input', (e) => { state.subtitle = e.target.value; redraw(); });
-  $('subtitle').addEventListener('change', () => commitHistory('subtitle'));
-  $('badge').addEventListener('input', (e) => { state.badge = e.target.value; redraw(); });
-  $('badge').addEventListener('change', () => commitHistory('badge'));
-  $('stars').addEventListener('change', (e) => { commitHistory('stars'); state.stars = Number(e.target.value); redraw(); });
+  const textField = (id, key, label) => {
+    $(id).addEventListener('input', (e) => {
+      state[key] = e.target.value;
+      redraw();
+    });
+    $(id).addEventListener('change', () => commitHistory(label));
+  };
+  textField('title', 'title', 'title');
+  textField('subtitle', 'subtitle', 'subtitle');
+  textField('badge', 'badge', 'badge');
+
+  $('stars').addEventListener('change', (e) => {
+    commitHistory('stars');
+    state.stars = Number(e.target.value);
+    redraw();
+  });
+
   for (const id of ['frame', 'grain', 'vignette', 'halftone', 'ribbon']) {
-    $(id).addEventListener('change', (e) => { commitHistory(id); state[id] = e.target.checked; redraw(); });
+    $(id).addEventListener('change', (e) => {
+      commitHistory(id);
+      state[id] = e.target.checked;
+      redraw();
+    });
   }
+
+  const selectedPanel = () => state.panels[state.selected];
   $('zoom').addEventListener('input', (e) => {
-    state.panels[state.selected].zoom = Number(e.target.value);
+    selectedPanel().zoom = Number(e.target.value);
     $('zoomVal').textContent = `${Math.round(Number(e.target.value) * 100)}%`;
     redraw();
   });
   $('zoom').addEventListener('change', () => commitHistory('zoom'));
-  $('panx').addEventListener('input', (e) => { state.panels[state.selected].ox = Number(e.target.value); redraw(); });
+  $('panx').addEventListener('input', (e) => {
+    selectedPanel().ox = Number(e.target.value);
+    redraw();
+  });
   $('panx').addEventListener('change', () => commitHistory('pan x'));
-  $('pany').addEventListener('input', (e) => { state.panels[state.selected].oy = Number(e.target.value); redraw(); });
+  $('pany').addEventListener('input', (e) => {
+    selectedPanel().oy = Number(e.target.value);
+    redraw();
+  });
   $('pany').addEventListener('change', () => commitHistory('pan y'));
+
   $('resetPanel').addEventListener('click', () => {
     commitHistory('reset panel');
-    state.panels[state.selected] = { photo: state.panels[state.selected].photo, zoom: 1, ox: 0, oy: 0.45 };
+    const panel = selectedPanel();
+    const keep = panel.photo;
+    state.panels[state.selected] = { photo: keep, zoom: 1, ox: 0, oy: 0.45 };
     syncControls();
     redraw();
   });
-  $('fillAll').addEventListener('click', () => fillAllPanels(state.panels[state.selected].photo));
+
+  $('fillAll').addEventListener('click', () => {
+    fillAllPanels(state.panels[state.selected].photo);
+  });
+
   $('undo').addEventListener('click', undoCover);
   $('redo').addEventListener('click', redoCover);
   document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undoCover(); }
-    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); redoCover(); }
+    const mod = e.ctrlKey || e.metaKey;
+    if (!mod || e.key.toLowerCase() !== 'z' && e.key.toLowerCase() !== 'y') return;
+    if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      undoCover();
+    } else if (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)) {
+      e.preventDefault();
+      redoCover();
+    }
   });
-  $('export').addEventListener('click', exportCover);
+
+  $('export').addEventListener('click', () => exportCover());
+
   $('upload').addEventListener('change', async (e) => {
-    // Up to 9 photos in one batch (one per panel in the 9-grid); each new photo
-    // is dealt to the next panel in order, so a batch fills the whole cover.
     const files = [...e.target.files].slice(0, 9);
     const written = [];
     for (const file of files) {
       const img = await loadImage(URL.createObjectURL(file));
-      const slot = photos.findIndex((p) => p && p.name.startsWith('Upload'));
-      const at = slot === -1 ? photos.length : slot;
-      photos[at] = { img, name: file.name.replace(/\.[^.]+$/, '').slice(0, 18) || 'Upload' };
-      written.push(at);
+      let slot = photos.findIndex((p) => p && p.name.startsWith('Upload'));
+      if (slot < 0) slot = photos.length;
+      const base = file.name.replace(/\.[^.]*$/, '').slice(0, 18) || 'Upload';
+      photos[slot] = { img, name: base };
+      written.push(slot);
     }
     if (written.length) {
-      for (let i = 0; i < PANEL_COUNT; i++) state.panels[i].photo = written[i % written.length];
+      for (let i = 0; i < PANEL_COUNT; i += 1) {
+        state.panels[i].photo = written[i % written.length];
+      }
     }
+    // Note: history is committed after the panels change (kept as-is).
     commitHistory('upload');
     syncControls();
     redraw();
     statusEl.textContent = `${files.length} photo${files.length > 1 ? 's' : ''} loaded — kept on this machine.`;
   });
+
   $('sampleBoulevard').addEventListener('click', async () => {
     photos[0] = await loadSample('boulevard');
     commitHistory('sample');
@@ -321,31 +367,47 @@ function bindControls() {
   });
 }
 
-/** Pointer drag on the preview: click picks a panel, drag pans its photo, wheel zooms it. */
 function bindPreview() {
-  let drag = null;
-  const toCover = (e) => {
-    const r = canvas.getBoundingClientRect();
-    return { x: (e.clientX - r.left) / r.width * canvas.width, y: (e.clientY - r.top) / r.height * canvas.height };
+  const toCanvas = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) / rect.width * canvas.width,
+      y: (e.clientY - rect.top) / rect.height * canvas.height,
+    };
   };
-  canvas.addEventListener('pointerdown', (e) => {
-    const p = toCover(e);
+  const hitPanel = (p) => {
     const panels = layoutPanels(state.layout, canvas.width, canvas.height);
-    const hit = panels.findIndex((r) => p.x >= r.x * canvas.width && p.x <= (r.x + r.w) * canvas.width && p.y >= r.y * canvas.height && p.y <= (r.y + r.h) * canvas.height);
-    if (hit === -1) return;
+    for (let i = 0; i < panels.length; i += 1) {
+      const r = panels[i];
+      if (
+        p.x >= r.x * canvas.width && p.x < (r.x + r.w) * canvas.width &&
+        p.y >= r.y * canvas.height && p.y < (r.y + r.h) * canvas.height
+      ) return i;
+    }
+    return -1;
+  };
+  let drag = null;
+
+  canvas.addEventListener('pointerdown', (e) => {
+    const p = toCanvas(e);
+    const hit = hitPanel(p);
+    if (hit < 0) return;
     state.selected = hit;
     syncControls();
-    drag = { x: p.x, y: p.y, ox: state.panels[hit].ox, oy: state.panels[hit].oy, moved: false };
+    const panel = state.panels[hit];
+    drag = { x: p.x, y: p.y, ox: panel.ox, oy: panel.oy, moved: false };
     canvas.setPointerCapture(e.pointerId);
     redraw();
   });
   canvas.addEventListener('pointermove', (e) => {
     if (!drag) return;
-    const p = toCover(e);
+    const p = toCanvas(e);
+    const panels = layoutPanels(state.layout, canvas.width, canvas.height);
+    const r = panels[state.selected];
+    const rect = { w: r.w * canvas.width, h: r.h * canvas.height };
     const panel = state.panels[state.selected];
-    const rect = layoutPanels(state.layout, canvas.width, canvas.height)[state.selected];
-    panel.ox = drag.ox + (p.x - drag.x) / (rect.w * canvas.width);
-    panel.oy = drag.oy + (p.y - drag.y) / (rect.h * canvas.height);
+    panel.ox = drag.ox + (p.x - drag.x) / rect.w;
+    panel.oy = drag.oy + (p.y - drag.y) / rect.h;
     drag.moved = true;
     redraw();
   });
@@ -375,7 +437,12 @@ async function init() {
   refreshUndoButtons();
   const query = new URLSearchParams(location.search);
   if (query.get('shot')) {
-    await runShot(query.get('shot'), query, state, photos, { redraw, syncControls, commitHistory, loadSample });
+    await runShot(query.get('shot'), query, state, photos, {
+      redraw,
+      syncControls,
+      commitHistory,
+      loadSample,
+    });
   } else {
     redraw();
   }
